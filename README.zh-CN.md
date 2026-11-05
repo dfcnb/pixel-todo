@@ -2,9 +2,15 @@
 
 **一个把攒钱当主线任务的像素风待办 App。**
 
+<p align="center">
+  <img src="docs/demo.gif" width="300" alt="勾掉待办涨血涨经验，记一笔进账，攒钱进度条往前走" />
+</p>
+
 无框架、无构建、无后端、无账号。一句 `python -m http.server` 就能跑。
 
 **[English](README.md) | 简体中文**
+
+## 各个页面
 
 <p align="center">
   <img src="docs/01-today.png" width="19%" />
@@ -113,6 +119,8 @@ python -m http.server 8765 --bind 127.0.0.1
 | `tools/version.py` | 版本快照与回退：`list` / `snap <ver>` / `restore <ver>` |
 | `tools/gen_icon.py` | 用标准库生成 PNG 图标，不依赖 PIL |
 | `tools/shot.js` | 通过 DevTools 协议截图 / 执行脚本，用于自检 |
+| `tools/record.js` | 按脚本连续抓帧，用来录演示动图 |
+| `tools/make-gif.py` | 把帧合成 GIF，共用一份调色板避免闪烁 |
 | `tools/fetch_gsw.py` | 抓 NBA 赛程与伤病名单到 `assets/` |
 
 ## 设计取舍

@@ -2,7 +2,13 @@
 
 **A pixel-art todo app where saving money is the main quest.**
 
+<p align="center">
+  <img src="docs/demo.gif" width="300" alt="Checking off tasks raises HP and EXP; logging income pushes the savings bar forward" />
+</p>
+
 No framework. No build step. No backend. No account. One `python -m http.server` and it runs.
+
+## Every screen
 
 <p align="center">
   <img src="docs/01-today.png" width="19%" />
@@ -107,6 +113,8 @@ That means **clearing your browser data deletes your data**. Settings has JSON e
 | `sw.js` | Offline cache |
 | `manifest.webmanifest` | PWA manifest |
 | `tools/shot.js` | Screenshot and run JS in a page via the DevTools protocol — used for self-checks |
+| `tools/record.js` | Records a scripted sequence of frames from a running page |
+| `tools/make-gif.py` | Assembles those frames into the demo GIF with one shared palette |
 | `tools/version.py` | Snapshot / restore: `list` · `snap <ver>` · `restore <ver>` |
 | `tools/gen_icon.py` | Generates PNG icons with the standard library only, no PIL |
 | `tools/fetch_gsw.py` | Pulls an NBA schedule + injury list into `assets/` |

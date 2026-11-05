@@ -21,6 +21,9 @@ avatar.html
 demo.html
 demo-seed.js
 
+# 录 GIF 时的中间帧（成品是 docs/demo.gif）
+frames/
+
 # 注：assets/gsw-live.json 进仓库，保证 clone 下来就有数据可看。
 # 要更新它，跑 tools/fetch_gsw.py。
 
