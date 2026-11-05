@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#12141c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="像素待办">
+<title>像素待办</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="scanlines" aria-hidden="true"></div>
+
+<!-- 极简顶栏 -->
+<header class="topbar">
+  <span class="logo">像</span>
+  <span class="t-title">像素待办</span>
+  <span class="t-date" id="topDate">11月2日</span>
+</header>
+
+<main id="main">
+
+  <!-- ============ 今天 ============ -->
+  <section class="view" id="view-today">
+
+    <!-- 主线卡 -->
+    <div class="goal-card">
+      <canvas id="hero" width="140" height="140" aria-label="像素勇者"></canvas>
+      <div class="goal-info">
+        <div class="goal-title">金币自由 · 第一阶段</div>
+        <div class="goal-num">
+          <b id="goalNow">0</b><span class="goal-denom"><span class="unit">/</span><span id="goalTarget">1,000,000</span></span>
+        </div>
+        <div class="goal-bar"><i id="goalFill"></i></div>
+        <div class="goal-meta">
+          <span>剩 <b id="goalDays">1095</b> 天</span>
+          <span class="sep">·</span>
+          <span>完成 <b id="goalPct">0%</b></span>
+          <span class="sep">·</span>
+          <span>连续 <b id="streakTxt">0</b> 天</span>
+        </div>
+      </div>
+      <button class="income-btn" id="incomeBtn">+ 进账</button>
+    </div>
+
+    <!-- 血条 / 请假条 -->
+    <div class="vitals">
+      <div class="vmain">
+        <div class="vrow">
+          <span class="lv">LV.<b id="lvNum">1</b></span>
+          <div class="vbar hp"><i id="hpFill"></i></div>
+          <span class="vnum" id="hpTxt">100/100</span>
+        </div>
+        <div class="vrow">
+          <span class="lv dim">EXP</span>
+          <div class="vbar exp"><i id="expFill"></i></div>
+          <span class="vnum" id="expTxt">0/100</span>
+        </div>
+      </div>
+      <button class="leave-btn" id="leaveBtn">
+        <span id="leaveLabel">请假</span><b id="leaveNum">2</b>
+      </button>
+    </div>
+
+    <!-- 记进账展开区 -->
+    <div class="income-panel" id="incomePanel" hidden>
+      <input type="number" id="incomeAmt" inputmode="numeric" placeholder="进账多少金币？">
+      <input type="text" id="incomeNote" placeholder="来源（可选）" maxlength="30">
+      <button class="btn-add" id="incomeOk">✓</button>
+      <div class="income-ch" id="incomeCh"></div>
+    </div>
+
+    <!-- 昨日遗留提示 -->
+    <div class="carry-tip" id="carryTip" hidden>
+      <span id="carryTxt"></span>
+      <button id="carryGo">去看 ›</button>
+    </div>
+
+    <!-- 今日待办 -->
+    <div class="sec-head">
+      <h2>今日待办</h2>
+      <span class="badge" id="todoCount">0</span>
+    </div>
+    <ul class="tasks" id="todoList"></ul>
+    <div class="empty" id="todoEmpty" hidden>
+      <p>今天还没有要做的。<br>写一件真正能让你离百万金币更近的事。</p>
+    </div>
+
+    <!-- 添加 -->
+    <div class="add-row">
+      <input id="addInput" type="text" placeholder="要做什么？" maxlength="80" autocomplete="off" enterkeyhint="done" style="flex:1">
+      <label class="repeat-toggle" id="repeatToggle" title="每天重复出现">
+        <input type="checkbox" id="repeatChk"><span>每日</span>
+      </label>
+      <button class="btn-add" id="addBtn" aria-label="添加">+</button>
+    </div>
+
+    <!-- 今日信息入口 -->
+    <button class="feed-entry" id="feedEntry">
+      <div class="fe-main">
+        <div class="fe-title">今日信息 · AI</div>
+        <div class="fe-sub" id="feSub">正在拉取…</div>
+      </div>
+      <span class="fe-count" id="feCount">—</span>
+      <span class="fe-arrow">›</span>
+    </button>
+  </section>
+
+  <!-- ============ 今日信息详情 ============ -->
+  <section class="view" id="view-feed" hidden>
+    <div class="feed-head">
+      <button class="back-btn" id="feedBack">‹ 返回</button>
+      <span class="feed-title">今日信息 · AI</span>
+      <span class="feed-date" id="feedDate"></span>
+    </div>
+    <div class="ai-feed" id="aiFeed">
+      <div class="ai-skeleton">正在拉取最新 AI 动态…</div>
+    </div>
+    <p class="ai-hint" id="aiHint" hidden>点任意一条看中英对照与解读。标题为机器翻译，原文在详情页底部。</p>
+  </section>
+
+  <!-- ============ 资讯详情 ============ -->
+  <section class="view" id="view-article" hidden>
+    <div class="feed-head">
+      <button class="back-btn" id="artBack">‹ 返回</button>
+      <span class="feed-title" id="artSrc">资讯</span>
+      <span class="feed-date" id="artTime"></span>
+    </div>
+
+    <div class="art-box">
+      <div class="art-zh" id="artZh">正在翻译…</div>
+      <div class="art-en" id="artEn"></div>
+      <div class="art-sum" id="artSum"></div>
+    </div>
+
+    <div class="sec-head"><h2>解读</h2><span class="badge" id="artTag">趋势 · 商机</span></div>
+    <div class="art-insight" id="artInsight"></div>
+
+    <a class="art-open" id="artOpen" target="_blank" rel="noopener">看原文 ›</a>
+  </section>
+
+  <!-- ============ 年历（任务日历） ============ -->
+  <section class="view" id="view-year" hidden>
+    <div class="cal-head">
+      <button class="cal-nav" id="calPrev" aria-label="上个月">‹</button>
+      <span class="cal-title" id="calTitle">2026 年 11 月</span>
+      <button class="cal-nav" id="calNext" aria-label="下个月">›</button>
+    </div>
+
+    <div class="cal-week">
+      <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+
+    <div class="cal-legend">
+      <i class="lg done"></i><span>全清</span>
+      <i class="lg todo"></i><span>有未完成</span>
+      <i class="lg plan"></i><span>未来安排</span>
+      <i class="lg gsw"></i><span>勇士</span>
+      <i class="lg imp"></i><span>重要</span>
+    </div>
+
+    <div class="day-panel">
+      <div class="day-head">
+        <span id="dayHead">选一个日期</span>
+        <span class="day-count" id="dayCount"></span>
+        <button class="mark-btn" id="markBtn">标为重要</button>
+      </div>
+
+      <div class="game-card" id="gameCard" hidden>
+        <div class="gc-top">
+          <span class="gc-tag">GSW</span>
+          <span class="gc-title" id="gcTitle"></span>
+        </div>
+        <div class="gc-meta" id="gcMeta"></div>
+        <div class="gc-curry" id="gcCurry"></div>
+      </div>
+
+      <ul class="tasks" id="dayList"></ul>
+      <div class="empty empty-sm" id="dayEmpty" hidden>
+        <p>这天还没有安排。<br>可以提前把事写在这里。</p>
+      </div>
+      <div class="add-row">
+        <input id="dayAddInput" type="text" placeholder="给这天加一条…" maxlength="80" autocomplete="off">
+        <button class="btn-add" id="dayAddBtn" aria-label="添加">+</button>
+      </div>
+    </div>
+
+    <div class="tip">点任意一天查看或安排任务。写在这里的任务，到那天会自动出现在「今日待办」。</div>
+  </section>
+
+  <!-- ============ 设置 ============ -->
+  <!-- ============ 回顾 ============ -->
+  <section class="view" id="view-review" hidden>
+    <div class="rv-hero">
+      <div class="rv-top">
+        <span class="rv-label">已攒</span>
+        <span class="rv-num"><b id="rvNow">0</b><span class="rv-slash"> / </span><span id="rvTarget">1,000,000</span></span>
+      </div>
+      <div class="rv-bar"><i id="rvFill"></i></div>
+      <div class="rv-sub">
+        <span>剩 <b id="rvDays">0</b> 天</span>
+        <span class="sep">·</span>
+        <span id="rvEta">按当前速度：—</span>
+      </div>
+    </div>
+
+    <div class="rv-month">
+      <div class="rv-row"><span>本月进账</span><b id="rvIn">0</b></div>
+      <div class="rv-row"><span>本月应攒</span><b id="rvShould">0</b></div>
+      <div class="rv-row"><span>差额</span><b id="rvDiff">0</b></div>
+    </div>
+
+    <div class="sec-head"><h2>收入渠道</h2><span class="badge" id="rvChBadge">本月</span></div>
+    <div class="ch-list" id="rvChannels"></div>
+
+    <div class="sec-head"><h2>近 6 个月</h2></div>
+    <div class="rv-chart" id="rvChart"></div>
+
+    <div class="sec-head"><h2>任务</h2></div>
+    <div class="maxrow">
+      <div class="stat"><b id="rvDone">0</b><span>本月完成</span></div>
+      <div class="stat"><b id="rvStreak">0</b><span>连续天数</span></div>
+      <div class="stat"><b id="rvLeave">0</b><span>本月请假</span></div>
+    </div>
+
+    <div class="ver">像素待办 v1.1.02 · 本地版</div>
+  </section>
+
+  <!-- ============ 机会库 ============ -->
+  <section class="view" id="view-opps" hidden>
+    <div class="feed-head">
+      <button class="back-btn" id="oppBack">‹ 返回</button>
+      <span class="feed-title">机会库</span>
+      <span class="feed-date"></span>
+    </div>
+
+    <div class="maxrow">
+      <div class="stat"><b id="oppDoingNum">0</b><span>在试</span></div>
+      <div class="stat"><b id="oppWonNum">0</b><span>成了</span></div>
+      <div class="stat"><b id="oppEarnNum">0</b><span>已赚</span></div>
+    </div>
+
+    <div class="add-row opp-add-row">
+      <input id="oppInput" type="text" placeholder="看到一个机会？写一句…" maxlength="90" autocomplete="off" enterkeyhint="done">
+      <button class="btn-add" id="oppAdd" aria-label="添加">+</button>
+    </div>
+
+    <div class="sec-head"><h2>进行中</h2><span class="badge" id="oppDoing">0</span></div>
+    <ul class="opp-list" id="oppDoingList"></ul>
+    <div class="empty empty-sm" id="oppEmpty" hidden>
+      <p>还没有机会。<br>从 AI 资讯里看到能赚钱的，点「＋机会」存进来。</p>
+    </div>
+
+    <div id="oppDoneSec">
+      <div class="sec-head"><h2>已结束</h2><span class="badge" id="oppDone">0</span></div>
+      <ul class="opp-list" id="oppDoneList"></ul>
+    </div>
+
+    <div class="tip">想法 → 在试 → 有反馈 → 成了 / 废了。成了的填实收，一键记进主线。</div>
+  </section>
+
+  <!-- ============ 其他功能 ============ -->
+  <section class="view" id="view-more" hidden>
+    <button class="feed-entry" id="oppEntry" style="margin-top:0;margin-bottom:16px">
+      <div class="fe-main">
+        <div class="fe-title">机会库</div>
+        <div class="fe-sub" id="oppSub">在试 0 · 成了 0 · 已赚 0</div>
+      </div>
+      <span class="fe-arrow">›</span>
+    </button>
+
+    <div class="idea-input">
+      <textarea id="ideaInput" placeholder="想到什么就先丢这儿，不用排日期…" rows="3" maxlength="300"></textarea>
+      <button class="idea-save" id="ideaSave">存下</button>
+    </div>
+    <div class="sec-head"><h2>灵感</h2><span class="badge" id="ideaCount">0</span></div>
+    <ul class="idea-list" id="ideaList"></ul>
+    <div class="empty empty-sm" id="ideaEmpty" hidden>
+      <p>还没有灵感。<br>脑子里冒出什么就写下来，不用想怎么安排。</p>
+    </div>
+    <div class="tip">灵感不占日期、不算任务。想动手的时候，点「→ 今天」变成明日待办。</div>
+
+    <div class="sec-head"><h2>设置</h2></div>
+
+    <div class="card">
+      <div class="card-title">主线目标</div>
+      <div class="row"><span>目标金币</span><input type="number" id="goalTargetInput" inputmode="numeric" value="1000000"></div>
+      <div class="row"><span>截止日期</span><input type="date" id="goalDeadlineInput"></div>
+      <div class="row"><span>已攒金币</span><input type="number" id="goalNowInput" inputmode="numeric" value="0"></div>
+      <p class="hint">目标金额、期限、已攒金币都改这里。「记进账」在首页主线卡上。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">收入渠道</div>
+      <div id="chEditor"></div>
+      <button class="btn ch-add-btn" id="chAdd">+ 加一条渠道</button>
+      <p class="hint">记进账时选渠道。设了月目标的，回顾页会显示还差多少；上限 6 条。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">提醒</div>
+      <div class="row"><span>每天提醒时间</span><input type="time" id="remindTime" value="21:00"></div>
+      <div class="row"><span>开启提醒</span><button class="switch" id="remindSwitch" role="switch" aria-checked="false"></button></div>
+      <p class="hint">网页版提醒只在页面打开时生效；加到主屏后由系统调度。</p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">规则</div>
+      <div class="rule"><b>完成普通待办</b><span>+12 EXP · 回 4 血</span></div>
+      <div class="rule"><b>完成每日待办</b><span>+8 EXP · 回 4 血</span></div>
+      <div class="rule"><b>漏做每日待办</b><span>−15 HP / 件</span></div>
+      <div class="rule"><b>血量归零</b><span>掉一级，半血复活</span></div>
+      <div class="rule"><b>请假</b><span>每月发 2 张，可叠加至 999 张</span></div>
+      <div class="rule"><b>请假当天</b><span>不扣血，连续天数不中断</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">数据</div>
+      <div class="btn-row">
+        <button class="btn" id="exportBtn">导出备份</button>
+        <button class="btn" id="importBtn">导入备份</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json" hidden>
+      <div class="btn-row">
+        <button class="btn" id="checkBtn">数据体检</button>
+        <button class="btn" id="restorePrevBtn">恢复上一份</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-danger" id="resetBtn">清空所有数据</button>
+      </div>
+      <p class="hint">数据存在这台设备的浏览器里，导出备份是个 JSON 文件。</p>
+    </div>
+
+    <div class="ver">像素待办 v1.1.02 · 本地版</div>
+  </section>
+
+</main>
+
+<nav class="tabs">
+  <button class="tab on" data-view="today"><span class="tab-ico">▣</span><span>今天</span></button>
+  <button class="tab" data-view="year"><span class="tab-ico">▦</span><span>年历</span></button>
+  <button class="tab" data-view="review"><span class="tab-ico">▤</span><span>回顾</span></button>
+  <button class="tab" data-view="more"><span class="tab-ico">✦</span><span>其他功能</span></button>
+</nav>
+
+<div class="flash" id="flash" aria-hidden="true"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="hero.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
