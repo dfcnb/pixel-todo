@@ -1,6 +1,7 @@
-/* 缓存策略：页面与数据走网络优先，静态资源走缓存优先。
-   每次发版请把 CACHE 改成新版本号 —— 名字一变，浏览器才会拉新文件。 */
-const CACHE = 'pixel-todo-v1.1.02';
+/* 缓存策略：页面、数据、静态资源全部网络优先，断网才回退缓存。
+   这么做的原因：缓存优先会让 app.js 永远停在第一次装的那个版本 ——
+   页面版本号变了、功能还是旧的。改版后必须让新代码立刻生效。 */
+const CACHE = 'pixel-todo-v1.5.00';
 const DATA_CACHE = 'pixel-todo-data';
 
 const ASSETS = [
@@ -16,7 +17,10 @@ const ASSETS = [
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE)
+      // 逐个加：某个文件缺失不该让整个安装失败
+      .then((c) => Promise.all(ASSETS.map((u) => c.add(u).catch(() => {}))))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -30,56 +34,32 @@ self.addEventListener('activate', (e) => {
   );
 });
 
+function netFirst(req, cacheName) {
+  return fetch(req)
+    .then((res) => {
+      if (res && res.ok) {
+        const copy = res.clone();
+        caches.open(cacheName).then((c) => c.put(req, copy)).catch(() => {});
+      }
+      return res;
+    })
+    .catch(() => caches.match(req).then((hit) => hit || caches.match('./index.html')));
+}
+
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
   const url = new URL(e.request.url);
 
-  // 1. 跨域请求（ESPN 赛程、AI 资讯源）一律交给浏览器，不拦截、不缓存
+  // 跨域（ESPN 赛程、AI 资讯源）一律交给浏览器，不拦截、不缓存
   if (url.origin !== self.location.origin) return;
 
-  // 2. 数据文件网络优先：拿到就刷新缓存，断网才回退旧数据
-  //    比分和库里状态靠这条保持最新，不能被缓存卡住
+  // 数据文件：网络优先，断网回退旧数据
   if (/\/assets\/.*\.json$/.test(url.pathname)) {
-    e.respondWith(
-      fetch(e.request)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(DATA_CACHE).then((c) => c.put(e.request, copy));
-          }
-          return res;
-        })
-        .catch(() => caches.match(e.request))
-    );
+    e.respondWith(netFirst(e.request, DATA_CACHE));
     return;
   }
 
-  // 3. 页面导航网络优先：保证每次打开拿到最新版本，断网才用缓存
-  if (e.request.mode === 'navigate') {
-    e.respondWith(
-      fetch(e.request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put('./index.html', copy));
-          return res;
-        })
-        .catch(() => caches.match('./index.html'))
-    );
-    return;
-  }
-
-  // 4. 静态资源缓存优先
-  e.respondWith(
-    caches.match(e.request).then((hit) => {
-      if (hit) return hit;
-      return fetch(e.request).then((res) => {
-        if (res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy));
-        }
-        return res;
-      });
-    })
-  );
+  // 页面与静态资源：全部网络优先，保证发版即生效
+  e.respondWith(netFirst(e.request, CACHE));
 });

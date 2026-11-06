@@ -73,12 +73,7 @@
       <input type="text" id="incomeNote" placeholder="来源（可选）" maxlength="30">
       <button class="btn-add" id="incomeOk">✓</button>
       <div class="income-ch" id="incomeCh"></div>
-    </div>
-
-    <!-- 昨日遗留提示 -->
-    <div class="carry-tip" id="carryTip" hidden>
-      <span id="carryTxt"></span>
-      <button id="carryGo">去看 ›</button>
+      <button class="income-log-btn" id="incomeLogBtn">查看全部记录 <b id="incomeLogNum">0</b> 笔 ›</button>
     </div>
 
     <!-- 今日待办 -->
@@ -109,6 +104,28 @@
       <span class="fe-count" id="feCount">—</span>
       <span class="fe-arrow">›</span>
     </button>
+  </section>
+
+  <!-- ============ 进账记录 ============ -->
+  <section class="view" id="view-income" hidden>
+    <div class="feed-head">
+      <button class="back-btn" id="incBack">‹ 返回</button>
+      <span class="feed-title">进账记录</span>
+      <span class="feed-date"></span>
+    </div>
+
+    <div class="maxrow">
+      <div class="stat"><b id="incAll">0</b><span>笔数</span></div>
+      <div class="stat"><b id="incSum">0</b><span>记录合计</span></div>
+      <div class="stat"><b id="incMonth">0</b><span>本月</span></div>
+    </div>
+
+    <ul class="inc-list" id="incList"></ul>
+    <div class="empty empty-sm" id="incEmpty" hidden>
+      <p>还没有进账记录。<br>首页主线卡点「+ 进账」记第一笔。</p>
+    </div>
+
+    <div class="tip">删除会同时从主线余额里扣掉这笔；机会库记进来的那笔，还会退回「待记入」状态。</div>
   </section>
 
   <!-- ============ 今日信息详情 ============ -->
@@ -229,7 +246,7 @@
       <div class="stat"><b id="rvLeave">0</b><span>本月请假</span></div>
     </div>
 
-    <div class="ver">像素待办 v1.1.02 · 本地版</div>
+    <div class="ver">像素待办 v1.5.00 · 本地版</div>
   </section>
 
   <!-- ============ 机会库 ============ -->
@@ -240,9 +257,10 @@
       <span class="feed-date"></span>
     </div>
 
-    <div class="maxrow">
+    <div class="maxrow maxrow-4">
       <div class="stat"><b id="oppDoingNum">0</b><span>在试</span></div>
       <div class="stat"><b id="oppWonNum">0</b><span>成了</span></div>
+      <div class="stat"><b id="oppDeadNum">0</b><span>废了</span></div>
       <div class="stat"><b id="oppEarnNum">0</b><span>已赚</span></div>
     </div>
 
@@ -251,10 +269,15 @@
       <button class="btn-add" id="oppAdd" aria-label="添加">+</button>
     </div>
 
+    <div class="opp-search">
+      <input id="oppSearch" type="text" placeholder="搜机会：标题或评价…" maxlength="40" autocomplete="off" enterkeyhint="search">
+      <button id="oppSearchClear" class="opp-clear" hidden aria-label="清空搜索">×</button>
+    </div>
+
     <div class="sec-head"><h2>进行中</h2><span class="badge" id="oppDoing">0</span></div>
     <ul class="opp-list" id="oppDoingList"></ul>
     <div class="empty empty-sm" id="oppEmpty" hidden>
-      <p>还没有机会。<br>从 AI 资讯里看到能赚钱的，点「＋机会」存进来。</p>
+      <p id="oppEmptyTxt">还没有机会。<br>从 AI 资讯里看到能赚钱的，点「＋机会」存进来。</p>
     </div>
 
     <div id="oppDoneSec">
@@ -262,7 +285,41 @@
       <ul class="opp-list" id="oppDoneList"></ul>
     </div>
 
-    <div class="tip">想法 → 在试 → 有反馈 → 成了 / 废了。成了的填实收，一键记进主线。</div>
+    <div class="tip">想法 → 在试 → 有反馈 → 成了 / 废了。成了的填实收，一键记进主线。每条都能写评价，记下试出来的结果。</div>
+  </section>
+
+  <!-- ============ 已完成任务 ============ -->
+  <section class="view" id="view-done" hidden>
+    <div class="feed-head">
+      <button class="back-btn" id="doneBack">‹ 返回</button>
+      <span class="feed-title">已完成任务</span>
+      <span class="feed-date"></span>
+    </div>
+
+    <div class="maxrow maxrow-4">
+      <div class="stat"><b id="dnAll">0</b><span>累计完成</span></div>
+      <div class="stat"><b id="dnExp">0</b><span>累计 EXP</span></div>
+      <div class="stat"><b id="dnMoney">0</b><span>累计收益</span></div>
+      <div class="stat"><b id="dnToday">0</b><span>今天完成</span></div>
+    </div>
+
+    <div class="dn-search">
+      <input id="dnSearch" type="text" placeholder="搜已完成的任务…" maxlength="40" autocomplete="off" enterkeyhint="search">
+      <button id="dnClear" class="dn-clear" hidden aria-label="清空搜索">×</button>
+    </div>
+
+    <div class="dn-sort" id="dnSort">
+      <button class="dn-s on" data-sort="time-desc">最新完成</button>
+      <button class="dn-s" data-sort="time-asc">最早完成</button>
+      <button class="dn-s" data-sort="exp-desc">收益最高</button>
+      <button class="dn-s" data-sort="exp-asc">收益最低</button>
+    </div>
+
+    <ul class="dn-list" id="dnList"></ul>
+    <div class="empty empty-sm" id="dnEmpty" hidden>
+      <p>这里还没有记录。<br>勾掉一件待办，它就会出现在这儿。</p>
+    </div>
+    <div class="tip">EXP 和回血是勾掉那一刻系统给的；右边的金额要自己填，没填就是无收益。取消勾选会把经验、血和记录一起退回。</div>
   </section>
 
   <!-- ============ 其他功能 ============ -->
@@ -271,6 +328,14 @@
       <div class="fe-main">
         <div class="fe-title">机会库</div>
         <div class="fe-sub" id="oppSub">在试 0 · 成了 0 · 已赚 0</div>
+      </div>
+      <span class="fe-arrow">›</span>
+    </button>
+
+    <button class="feed-entry" id="doneEntry" style="margin-top:0;margin-bottom:16px">
+      <div class="fe-main">
+        <div class="fe-title">已完成任务</div>
+        <div class="fe-sub" id="doneSub">共 0 条 · 累计 0 EXP</div>
       </div>
       <span class="fe-arrow">›</span>
     </button>
@@ -337,7 +402,7 @@
       <p class="hint">数据存在这台设备的浏览器里，导出备份是个 JSON 文件。</p>
     </div>
 
-    <div class="ver">像素待办 v1.1.02 · 本地版</div>
+    <div class="ver">像素待办 v1.5.00 · 本地版</div>
   </section>
 
 </main>

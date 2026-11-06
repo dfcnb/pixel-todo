@@ -32,11 +32,22 @@ The whole thing is one HTML page and three JS files, because I wanted to still u
 
 | | |
 |---|---|
-| **Today** | Main quest card (saved / target / days left / progress) + RPG status bar (LV / HP / EXP / leave tokens) + today's tasks |
+| **Today** | Main quest card (saved / target / days left / progress) + RPG status bar (LV / HP / EXP / leave tokens) + today's tasks, **with unfinished ones rolling over day after day** |
 | **Calendar** | Month view, schedule tasks ahead, mark important dates, optional external event feed |
 | **Review** | Savings progress, projected finish date, this month's income vs. target, **per-channel breakdown**, 6-month bar chart |
-| **More** | Opportunity pipeline, inbox for stray ideas, settings, JSON export/import |
+| **More** | Opportunity pipeline, **completed task log**, inbox for stray ideas, settings, JSON export/import |
 | **News** | Optional: a card that pulls fresh tech news, bilingual, with a "what this could be used for" note |
+
+### Tasks roll over until done
+
+A one-off task dated in the past and still unchecked **shows up again every day** until you tick it or
+delete it. No re-creating, no "move to today" button.
+
+- Sorted by how long they've been waiting — the oldest debt sits on top.
+- Each row prints its own history: `始于 11-02 · 顺延 4 天` while open, `11-02 → 11-06 完成` once done.
+- A task finished today stays in the list, struck through, until the day ends.
+- Daily tasks (`♻ 每日`) are exempt — they reset every day instead of accumulating.
+- The old "昨天还剩 N 件 · 去看" banner is gone; those tasks are simply in the list now.
 
 ### The RPG layer
 
@@ -61,6 +72,8 @@ Your target isn't one big number, it's the sum of a few legs.
 | Logging income | Pick a channel, the amount is stored with it |
 | Review page | This month per channel + a share bar; if you set a monthly target it shows the gap |
 | Old data | Income logged before channels existed lands in "Uncategorized". Nothing is dropped |
+| Ledger | `查看全部记录` inside the income panel opens a full list: amount, channel tag, date, note. Top shows count / total / this month |
+| Deleting | Each row has `删`, which expands an inline confirm (`删掉这笔 3,000？` + delete / cancel) — no system dialog. Confirming removes the row **and subtracts the same amount from the main quest balance**, so the number on the home card drops in the same frame. If the entry came from an opportunity, that opportunity flips back to `settled: false` and returns to the "wait to record" state |
 
 ### Opportunity pipeline
 
@@ -71,6 +84,38 @@ idea → trying → feedback → landed / dead
 ```
 
 Dead ones are kept, not deleted. After a year that column tells you how many things you actually tried, and how many worked.
+
+Each card also takes a **review** (`＋ 写评价` / `改评价`, up to 300 chars). It is shown as a quoted block
+on the card, saved with the opportunity, and searchable. Clearing the text removes it.
+
+The page header counts four things: `在试 / 成了 / 废了 / 已赚`. Those numbers are global — they do not
+change when you search.
+
+A search box under the capture field filters the list as you type, matching **title or review**.
+Sections with no hits collapse; if nothing matches at all you get `没有匹配「关键词」的机会，换个词试试。`
+with an `×` to clear.
+
+### Completed task log
+
+Every time you tick a task, one record is appended: text, finish time, and what it actually paid out
+(EXP, HP recovered, or a level-up). Unticking removes the record **and takes the payout back**:
+EXP and HP return to what they were, and if that EXP was what pushed you over the line, the level drops too.
+
+- Entry lives in **More → 已完成任务**, with a running total on the card itself.
+- Search filters by task text as you type.
+- **Manual payout**: each row has a `＋ 收益` button. Tap it, type an amount, Enter — it becomes `¥8,000`.
+  Nothing entered means no payout. Clearing it (0 or empty) puts the button back.
+  The amount is a record only: it does **not** touch the main quest balance or the income log.
+- Four sort modes: newest, oldest, highest payout, lowest payout. "Payout" compares the manual amount
+  first, then EXP, then time.
+- **Seed an opportunity**: each row has `＋ 放入机会库`. It adds one card to the opportunity pipeline
+  using the task text, then flips to `✓ 已在机会库` and greys out. The completion record itself is
+  **never removed or reordered** — it stays exactly where it was, with its time and payout intact.
+- Tasks finished before this feature existed are back-filled once on load. If the old record had no
+  finish time, it falls back to the task's creation time and is shown slightly dimmed.
+- **The log is append-only with respect to existing data**: loading an older save adds the `doneLog`
+  field and nothing else. Verified by hashing all ten pre-existing fields before and after the upgrade —
+  zero changes.
 
 ## Run it
 

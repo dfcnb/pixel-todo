@@ -42,6 +42,7 @@
       tasks: [],
       marked: [],
       ideas: [],
+      doneLog: [],
       history: {},
       meta: { lastDay: today(), streak: 0, best: 0 },
       settings: { remind: false, remindTime: '21:00' }
@@ -83,6 +84,24 @@
       s.marked = Array.isArray(s.marked) ? s.marked : [];
       s.ideas = Array.isArray(s.ideas) ? s.ideas : [];
       s.opps = Array.isArray(s.opps) ? s.opps : [];
+      s.doneLog = Array.isArray(s.doneLog) ? s.doneLog : [];
+      // 迁移：已勾选但还没进完成日志的老任务，按当时时间补一条。
+      // 按 taskId + doneAt 去重，重复加载不会重复补。
+      var seenDone = {};
+      s.doneLog.forEach(function (d0) { seenDone[d0.taskId + '@' + d0.doneAt] = 1; });
+      s.tasks.forEach(function (t0) {
+        if (!t0.done) return;
+        // 早期版本可能没记 doneAt，退回创建时间；再没有就记今天零点，宁可时间粗也不漏
+        var at = t0.doneAt || t0.createdAt || (new Date(today() + 'T00:00:00').getTime());
+        var dk = t0.id + '@' + at;
+        if (seenDone[dk]) return;
+        s.doneLog.push({
+          id: 'lg-' + dk, taskId: t0.id, text: t0.text,
+          repeat: !!t0.repeat, doneAt: at,
+          exp: t0.repeat ? 8 : 12, hp: 0, lv: 0, legacy: true
+        });
+        seenDone[dk] = 1;
+      });
       if (!Array.isArray(s.goal.channels) || !s.goal.channels.length) s.goal.channels = b.goal.channels;
       // 迁移：老任务没有归属日期，用创建那天补上
       s.tasks.forEach(function (x) {
@@ -167,7 +186,23 @@
   /* ---------- 历史 ---------- */
   function todayTasks() {
     var t = today();
-    return state.tasks.filter(function (x) { return x.repeat || x.date === t; });
+    return state.tasks.filter(function (x) {
+      if (x.repeat) return true;          // 每日任务天天在
+      if (!x.date) return true;           // 老数据没日期，别丢
+      if (x.date === t) return true;      // 今天安排的
+      if (x.date < t) {
+        if (!x.done) return true;         // 以前没做完，继续顺延到今天
+        // 顺延的今天做完了：留在列表里显示划掉，隔天才消失
+        if (x.doneAt && key(new Date(x.doneAt)) === t) return true;
+      }
+      return false;
+    });
+  }
+
+  // 顺延了几天（0 表示今天才到期）
+  function carryDays(t) {
+    if (!t.date || t.date >= today()) return 0;
+    return dayDiff(t.date, today());
   }
   function touchHistory() {
     var k = today();
@@ -235,6 +270,7 @@
 
   function gain(exp) {
     var p = state.player;
+    var hp0 = p.hp, lv0 = p.level;
     p.exp += exp;
     p.hp = Math.min(p.maxHp, p.hp + 4);
     while (p.exp >= p.expMax) {
@@ -246,6 +282,8 @@
       flash('gold');
       toast('LV.' + p.level + ' · 血量上限 +10', 'good');
     }
+    // 返回这次实际拿到的东西，给完成日志用
+    return { exp: exp, hp: p.hp - hp0, lv: p.level - lv0 };
   }
 
   /* ---------- 跨天结算 ---------- */
@@ -337,11 +375,21 @@
     meta.className = 'task-meta';
     var bits = [];
     if (t.repeat) bits.push('<span class="rep">♻ 每日</span>');
-    if (!t.done && !t.repeat && t.date) {
-      var age = dayDiff(t.date, today());
-      if (age >= 3) {
-        bits.push('<span class="age-warn">挂了 ' + age + ' 天</span>');
+
+    var startKey = t.date || (t.createdAt ? key(new Date(t.createdAt)) : '');
+    var startTxt = startKey ? fmtIncDate(startKey) : '';
+
+    if (t.done && t.doneAt) {
+      var doneTxt = fmtIncDate(key(new Date(t.doneAt)));
+      bits.push('<span class="span">' +
+        (startTxt ? startTxt + ' → ' + doneTxt : doneTxt) + ' 完成</span>');
+    } else if (!t.repeat) {
+      var cd = carryDays(t);
+      if (cd > 0) {
+        bits.push('<span class="carry">始于 ' + startTxt + ' · 顺延 ' + cd + ' 天</span>');
         li.classList.add('aged');
+      } else if (startTxt) {
+        bits.push('<span class="span">' + startTxt + '</span>');
       }
     }
     meta.innerHTML = bits.join('');
@@ -364,8 +412,16 @@
 
   function renderTasks() {
     var all = todayTasks();
-    var open = all.filter(function (t) { return !t.done; });
+    var tKey = today();
+    // 顺延的按原定日期从早到晚排，欠得最久的顶在最上面
+    var carried = all.filter(function (t) {
+      return !t.done && !t.repeat && t.date && t.date < tKey;
+    }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    var fresh = all.filter(function (t) {
+      return !t.done && (t.repeat || !t.date || t.date >= tKey);
+    });
     var done = all.filter(function (t) { return t.done; });
+    var open = carried.concat(fresh);
 
     var list = $('#todoList');
     list.textContent = '';
@@ -383,40 +439,80 @@
     renderGoal();
     renderVitals();
     renderTasks();
-    renderCarry();
     touchHistory();
     save();
     renderOppEntry();
+    renderDoneEntry();
+    if ($('#incomeLogNum')) $('#incomeLogNum').textContent = (state.goal.log || []).length;
     if (curView === 'year') { renderYear(); renderDayPanel(); }
   }
 
   /* ---------- 昨日遗留提示 ---------- */
-  function renderCarry() {
-    var y = addDays(today(), -1);
-    var left = state.tasks.filter(function (x) {
-      return !x.repeat && x.date === y && !x.done;
-    }).length;
-    var tip = $('#carryTip');
-    if (!tip) return;
-    tip.hidden = left <= 0;
-    if (left > 0) {
-      tip.dataset.date = y;
-      $('#carryTxt').textContent = '昨天还剩 ' + left + ' 件没做完';
-    }
-  }
-
   /* ---------- 交互：任务 ---------- */
   function toggleTask(id) {
     var t = state.tasks.find(function (x) { return x.id === id; });
     if (!t) return;
     t.done = !t.done;
-    t.doneAt = t.done ? Date.now() : null;
     if (t.done) {
-      gain(t.repeat ? 8 : 12);
+      t.doneAt = Date.now();
+      var g = gain(t.repeat ? 8 : 12);
+      logDone(t, g);
       if (window.Hero) Hero.cheer();
+    } else {
+      t.doneAt = null;
+      var rec = dropDone(t.id);
+      if (rec) lose(rec);
     }
     if (navigator.vibrate) navigator.vibrate(12);
     render();
+  }
+
+  /* ---------- 已完成任务：写入与撤回 ---------- */
+  function logDone(t, g) {
+    state.doneLog = state.doneLog || [];
+    state.doneLog.push({
+      id: uid(),
+      taskId: t.id,
+      text: t.text,
+      repeat: !!t.repeat,
+      started: t.date || null,
+      doneAt: t.doneAt || Date.now(),
+      exp: g ? g.exp : (t.repeat ? 8 : 12),
+      // 记录这次实际涨了多少血（升级回满也算），撤销时按这个数退
+      hp: g ? Math.max(0, g.hp) : 0,
+      lv: g ? g.lv : 0
+    });
+    if (state.doneLog.length > 3000) state.doneLog = state.doneLog.slice(-3000);
+  }
+
+  // 取消勾选：撤掉这条任务最近的完成记录，不动别人的
+  function dropDone(taskId) {
+    var log = state.doneLog || [];
+    for (var i = log.length - 1; i >= 0; i--) {
+      if (log[i].taskId === taskId) return log.splice(i, 1)[0];
+    }
+    return null;
+  }
+
+  // 撤销一次完成：把当初发的经验、血退回去；经验透支就降级
+  function lose(rec) {
+    if (!rec) return;
+    var p = state.player;
+
+    p.exp -= (rec.exp || 0);
+
+    // 经验变成负数说明这次让人升了级，退回上一级把额度补上
+    var guard = 0;
+    while (p.exp < 0 && p.level > 1 && guard++ < 60) {
+      p.level--;
+      p.maxHp = Math.max(10, p.maxHp - 10);
+      p.expMax = Math.max(10, Math.round(p.expMax / 1.3));
+      p.exp += p.expMax;
+    }
+    if (p.exp < 0) p.exp = 0;
+
+    // 退血：只退这次涨的部分，至少留 1 点，不触发掉级
+    p.hp = Math.max(1, Math.min(p.maxHp, p.hp - (rec.hp || 0)));
   }
 
   var lastDeleted = null;
@@ -1022,6 +1118,155 @@
     toast('已加到今天的待办', 'good');
   }
 
+  /* ---------- 进账记录 ---------- */
+  function chName(id) {
+    if (!id) return '未分类';
+    var c = (state.goal.channels || []).filter(function (x) { return x.id === id; })[0];
+    return c ? c.name : '未分类';
+  }
+
+  function fmtIncDate(k) {
+    if (!k || k.length < 10) return k || '';
+    var y = k.slice(0, 4), m = k.slice(5, 7), d = k.slice(8, 10);
+    if (y === String(new Date().getFullYear())) return m + '-' + d;
+    return y + '-' + m + '-' + d;
+  }
+
+  function renderIncomeLog() {
+    var log = state.goal.log || [];
+    var monthKey = today().slice(0, 7);
+
+    var sum = 0, msum = 0;
+    log.forEach(function (x) {
+      sum += (x.amt || 0);
+      if ((x.d || '').slice(0, 7) === monthKey) msum += (x.amt || 0);
+    });
+
+    if ($('#incAll')) {
+      $('#incAll').textContent = log.length;
+      $('#incSum').textContent = fmt(sum);
+      $('#incMonth').textContent = fmt(msum);
+    }
+    if ($('#incomeLogNum')) $('#incomeLogNum').textContent = log.length;
+
+    // 按日期倒序，同一天后记的排前面；保留原始索引用于删除
+    var rows = log.map(function (x, i) { return { r: x, i: i }; });
+    rows.sort(function (a, b) {
+      var da = a.r.d || '', db = b.r.d || '';
+      if (da !== db) return da < db ? 1 : -1;
+      return b.i - a.i;
+    });
+
+    var ul = $('#incList');
+    if (!ul) return;
+    ul.textContent = '';
+    rows.forEach(function (it) { ul.appendChild(incRow(it.r, it.i)); });
+
+    if ($('#incEmpty')) $('#incEmpty').hidden = log.length > 0;
+  }
+
+  function incRow(r, idx) {
+    var li = document.createElement('li');
+    li.className = 'inc-item';
+
+    var main = document.createElement('div');
+    main.className = 'inc-main';
+
+    var top = document.createElement('div');
+    top.className = 'inc-top';
+    var amt = document.createElement('span');
+    amt.className = 'inc-amt';
+    amt.textContent = '+' + fmt(r.amt || 0);
+    var ch = document.createElement('span');
+    ch.className = 'inc-ch';
+    ch.textContent = chName(r.ch);
+    top.appendChild(amt);
+    top.appendChild(ch);
+
+    var meta = document.createElement('div');
+    meta.className = 'inc-meta';
+    meta.textContent = fmtIncDate(r.d) + (r.note ? ' · ' + r.note : '');
+
+    main.appendChild(top);
+    main.appendChild(meta);
+
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'inc-del';
+    del.textContent = '删';
+    del.addEventListener('click', function (e) {
+      e.stopPropagation();
+      askDelIncome(li, r, idx);
+    });
+
+    li.appendChild(main);
+    li.appendChild(del);
+    return li;
+  }
+
+  // 行内二次确认，不用系统弹窗
+  function askDelIncome(li, r, idx) {
+    if (li.querySelector('.inc-ask')) return;
+    li.classList.add('asking');
+
+    var bar = document.createElement('div');
+    bar.className = 'inc-ask';
+
+    var t = document.createElement('span');
+    t.className = 'inc-ask-txt';
+    t.textContent = '删掉这笔 ' + fmt(r.amt || 0) + '？';
+
+    var yes = document.createElement('button');
+    yes.type = 'button';
+    yes.className = 'inc-yes';
+    yes.textContent = '删除';
+    yes.addEventListener('click', function (e) {
+      e.stopPropagation();
+      delIncome(idx);
+    });
+
+    var no = document.createElement('button');
+    no.type = 'button';
+    no.className = 'inc-no';
+    no.textContent = '取消';
+    no.addEventListener('click', function (e) {
+      e.stopPropagation();
+      bar.remove();
+      li.classList.remove('asking');
+    });
+
+    bar.appendChild(t);
+    bar.appendChild(yes);
+    bar.appendChild(no);
+    li.appendChild(bar);
+  }
+
+  function delIncome(idx) {
+    var log = state.goal.log || [];
+    var rec = log[idx];
+    if (!rec) { toast('这笔已经不在了', 'bad'); renderIncomeLog(); return; }
+    var amt = rec.amt || 0;
+
+    // 机会库记进来的，把那笔退回待记入
+    var back = '';
+    if (rec.oppId) {
+      var o = (state.opps || []).filter(function (x) { return x.id === rec.oppId; })[0];
+      if (o && o.settled) {
+        o.settled = false;
+        o.updatedAt = Date.now();
+        back = o.title;
+      }
+    }
+
+    state.goal.income = Math.max(0, (state.goal.income || 0) - amt);
+    log.splice(idx, 1);
+    save();
+    render();
+    renderIncomeLog();
+    renderOpps();
+    toast('已删除 −' + fmt(amt) + (back ? ' · 机会退回待记入' : ''), 'bad');
+  }
+
   /* ---------- 收入渠道 ---------- */
   var CH_COLORS = ['#5b8cff', '#5ee07a', '#ffc53d', '#ff7a59', '#b47cff', '#4dd6c8'];
 
@@ -1163,6 +1408,7 @@
     return {
       doing: list.filter(function (o) { return o.stage !== 'won' && o.stage !== 'dead'; }).length,
       won: list.filter(function (o) { return o.stage === 'won'; }).length,
+      dead: list.filter(function (o) { return o.stage === 'dead'; }).length,
       earned: list.reduce(function (a, o) { return a + (o.settled ? (o.earned || 0) : 0); }, 0)
     };
   }
@@ -1174,17 +1420,31 @@
     sub.textContent = '在试 ' + st.doing + ' · 成了 ' + st.won + ' · 已赚 ' + fmt(st.earned);
   }
 
+  var oppQuery = '';
+
   function renderOpps() {
     renderOppEntry();
     var list = state.opps || [];
     var byTime = function (a, b) { return (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0); };
-    var doing = list.filter(function (o) { return o.stage !== 'won' && o.stage !== 'dead'; }).sort(byTime);
-    var done = list.filter(function (o) { return o.stage === 'won' || o.stage === 'dead'; }).sort(byTime);
 
+    var q = oppQuery.trim().toLowerCase();
+    var hit = function (o) {
+      if (!q) return true;
+      return (o.title || '').toLowerCase().indexOf(q) >= 0 ||
+             (o.review || '').toLowerCase().indexOf(q) >= 0;
+    };
+
+    var doing = list.filter(function (o) { return o.stage !== 'won' && o.stage !== 'dead'; })
+                    .filter(hit).sort(byTime);
+    var done = list.filter(function (o) { return o.stage === 'won' || o.stage === 'dead'; })
+                   .filter(hit).sort(byTime);
+
+    // 顶部统计始终是全局的数，不跟着搜索变
     var st = oppStats();
     if ($('#oppDoingNum')) {
       $('#oppDoingNum').textContent = st.doing;
       $('#oppWonNum').textContent = st.won;
+      $('#oppDeadNum').textContent = st.dead;
       $('#oppEarnNum').textContent = fmt(st.earned);
     }
     $('#oppDoing').textContent = doing.length;
@@ -1197,8 +1457,15 @@
     doing.forEach(function (o) { ulD.appendChild(oppCard(o)); });
     done.forEach(function (o) { ulF.appendChild(oppCard(o)); });
 
-    $('#oppEmpty').hidden = list.length > 0;
+    var shown = doing.length + done.length;
+    $('#oppEmpty').hidden = shown > 0;
+    if (!shown && $('#oppEmptyTxt')) {
+      $('#oppEmptyTxt').textContent = q
+        ? '没有匹配「' + oppQuery.trim() + '」的机会，换个词试试。'
+        : '还没有机会。从 AI 资讯里看到能赚钱的，点「＋机会」存进来。';
+    }
     $('#oppDoneSec').hidden = done.length === 0;
+    if ($('#oppSearchClear')) $('#oppSearchClear').hidden = !oppQuery;
   }
 
   function oppCard(o) {
@@ -1333,7 +1600,77 @@
     }
 
     if (act.children.length) li.appendChild(act);
+
+    // 评价：有内容就显示，随时可改
+    if (o.review) {
+      var rv = document.createElement('div');
+      rv.className = 'opp-review';
+      rv.textContent = o.review;
+      li.appendChild(rv);
+    }
+
+    var rvBtn = document.createElement('button');
+    rvBtn.type = 'button';
+    rvBtn.className = 'opp-rv-btn';
+    rvBtn.textContent = o.review ? '改评价' : '＋ 写评价';
+    rvBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      openReview(li, o);
+    });
+    li.appendChild(rvBtn);
+
     return li;
+  }
+
+  // 就地展开评价编辑器，保存后重渲染
+  function openReview(li, o) {
+    if (li.querySelector('.opp-rv-edit')) return;
+    var shown = li.querySelector('.opp-review');
+    var btn = li.querySelector('.opp-rv-btn');
+    if (shown) shown.hidden = true;
+    if (btn) btn.hidden = true;
+
+    var box = document.createElement('div');
+    box.className = 'opp-rv-edit';
+
+    var ta = document.createElement('textarea');
+    ta.maxLength = 300;
+    ta.value = o.review || '';
+    ta.placeholder = '这条试得怎么样？写两句，以后翻回来能想起当时的判断。';
+
+    var bar = document.createElement('div');
+    bar.className = 'opp-rv-bar';
+
+    var saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'opp-btn primary';
+    saveBtn.textContent = '保存';
+    saveBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var v = ta.value.trim();
+      o.review = v;
+      o.reviewAt = v ? Date.now() : null;
+      o.updatedAt = Date.now();
+      save();
+      renderOpps();
+      toast(v ? '评价已保存' : '评价已清空', v ? 'good' : 'bad');
+    });
+
+    var cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'opp-btn ghost';
+    cancelBtn.textContent = '取消';
+    cancelBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      renderOpps();
+    });
+
+    bar.appendChild(saveBtn);
+    bar.appendChild(cancelBtn);
+    box.appendChild(ta);
+    box.appendChild(bar);
+    li.appendChild(box);
+    ta.focus();
   }
 
   function advOpp(id, to) {
@@ -1387,7 +1724,7 @@
     var chs = state.goal.channels || [];
     if (!o.ch) o.ch = (chs[1] || chs[0] || {}).id || '';
     state.goal.income += amt;
-    state.goal.log.push({ d: today(), amt: amt, note: o.title.slice(0, 30), ch: o.ch });
+    state.goal.log.push({ d: today(), amt: amt, note: o.title.slice(0, 30), ch: o.ch, oppId: o.id });
     o.settled = true;
     o.updatedAt = Date.now();
     save();
@@ -1567,22 +1904,219 @@
     });
   }
 
+  /* ---------- 已完成任务：列表 ---------- */
+  var DN_SORT = 'time-desc';
+  var dnQuery = '';
+
+  function fmtDoneAt(ts) {
+    var d = new Date(ts);
+    var t = pad(d.getHours()) + ':' + pad(d.getMinutes());
+    if (key(d) === today()) return '今天 ' + t;
+    var y = new Date();
+    y.setDate(y.getDate() - 1);
+    if (key(d) === key(y)) return '昨天 ' + t;
+    var md = pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    if (d.getFullYear() === new Date().getFullYear()) return md + ' ' + t;
+    return d.getFullYear() + '-' + md + ' ' + t;
+  }
+
+  function oppHas(title) {
+    var t = (title || '').trim().slice(0, 90);
+    if (!t) return false;
+    return (state.opps || []).some(function (o) { return o.title === t; });
+  }
+
+  function renderDoneEntry() {
+    var sub = $('#doneSub');
+    if (!sub) return;
+    var all = state.doneLog || [];
+    var sum = all.reduce(function (a, x) { return a + (x.exp || 0); }, 0);
+    var money = all.reduce(function (a, x) { return a + (x.money || 0); }, 0);
+    sub.textContent = '共 ' + all.length + ' 条 · 累计 ' + fmt(sum) + ' EXP' +
+      (money > 0 ? ' · ¥' + fmt(money) : '');
+  }
+
+  function doneRow(x) {
+    var li = document.createElement('li');
+    li.className = 'dn-item' + (x.legacy ? ' legacy' : '');
+
+    var main = document.createElement('div');
+    main.className = 'dn-main';
+
+    var t = document.createElement('div');
+    t.className = 'dn-text';
+    t.textContent = x.text || '(已删除的任务)';
+
+    var meta = document.createElement('div');
+    meta.className = 'dn-meta';
+    var st = x.started ? fmtIncDate(x.started) + ' → ' : '';
+    meta.textContent = st + fmtDoneAt(x.doneAt) + (x.repeat ? ' · 每日' : '');
+
+    main.appendChild(t);
+    main.appendChild(meta);
+
+    var side = document.createElement('div');
+    side.className = 'dn-side';
+
+    var g = document.createElement('div');
+    g.className = 'dn-gain';
+    var bits = ['+' + (x.exp || 0) + ' EXP'];
+    if (x.lv) bits.push('升 ' + x.lv + ' 级');
+    else if (x.hp) bits.push('+' + x.hp + ' HP');
+    g.textContent = bits.join(' · ');
+    side.appendChild(g);
+
+    var m = document.createElement('button');
+    m.type = 'button';
+    m.className = 'dn-money' + (x.money > 0 ? ' has' : '');
+    m.textContent = x.money > 0 ? '¥' + fmt(x.money) : '＋ 收益';
+    m.addEventListener('click', function (e) {
+      e.stopPropagation();
+      openMoneyEditor(side, x);
+    });
+    side.appendChild(m);
+
+    li.appendChild(main);
+    li.appendChild(side);
+
+    // 放入机会库：只往机会库加一张卡，不动这条完成记录
+    var has = oppHas(x.text);
+    var foot = document.createElement('button');
+    foot.type = 'button';
+    foot.className = 'dn-opp' + (has ? ' on' : '');
+    foot.textContent = has ? '✓ 已在机会库' : '＋ 放入机会库';
+    foot.disabled = has;
+    foot.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (foot.disabled) return;
+      if (addOpp(x.text, '')) {
+        foot.textContent = '✓ 已在机会库';
+        foot.disabled = true;
+        foot.classList.add('on');
+        toast('已放进机会库', 'good');
+      }
+    });
+    li.appendChild(foot);
+
+    return li;
+  }
+
+  // 点「＋收益」就地变成输入框，回车或点 ✓ 存下；填 0 或清空等于无收益
+  function openMoneyEditor(side, x) {
+    if (side.querySelector('.dn-money-edit')) return;
+    var btn = side.querySelector('.dn-money');
+
+    var box = document.createElement('div');
+    box.className = 'dn-money-edit';
+
+    var inp = document.createElement('input');
+    inp.type = 'number';
+    inp.inputMode = 'numeric';
+    inp.min = '0';
+    inp.step = '1';
+    inp.placeholder = '金额';
+    inp.value = x.money > 0 ? x.money : '';
+
+    var ok = document.createElement('button');
+    ok.type = 'button';
+    ok.className = 'dn-money-ok';
+    ok.textContent = '✓';
+
+    function commit() {
+      var v = parseFloat(inp.value);
+      x.money = (isFinite(v) && v > 0) ? Math.round(v * 100) / 100 : 0;
+      save();
+      renderDone();
+    }
+
+    ok.addEventListener('click', function (e) { e.stopPropagation(); commit(); });
+    inp.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); renderDone(); }
+    });
+
+    box.appendChild(inp);
+    box.appendChild(ok);
+    btn.parentNode.replaceChild(box, btn);
+    inp.focus();
+    if (inp.select) inp.select();
+  }
+
+  function renderDone() {
+    renderDoneEntry();
+
+    var all = (state.doneLog || []).slice();
+    var expAll = all.reduce(function (a, x) { return a + (x.exp || 0); }, 0);
+    var moneyAll = all.reduce(function (a, x) { return a + (x.money || 0); }, 0);
+    var tKey = today();
+    if ($('#dnAll')) {
+      $('#dnAll').textContent = all.length;
+      $('#dnExp').textContent = fmt(expAll);
+      $('#dnMoney').textContent = fmt(moneyAll);
+      $('#dnToday').textContent = all.filter(function (x) {
+        return key(new Date(x.doneAt)) === tKey;
+      }).length;
+    }
+
+    var q = dnQuery.trim().toLowerCase();
+    var list = q
+      ? all.filter(function (x) { return (x.text || '').toLowerCase().indexOf(q) >= 0; })
+      : all;
+
+    if (DN_SORT === 'time-desc') {
+      list.sort(function (a, b) { return b.doneAt - a.doneAt; });
+    } else if (DN_SORT === 'time-asc') {
+      list.sort(function (a, b) { return a.doneAt - b.doneAt; });
+    } else if (DN_SORT === 'exp-desc') {
+      list.sort(function (a, b) {
+        return ((b.money || 0) - (a.money || 0)) ||
+               ((b.exp || 0) - (a.exp || 0)) ||
+               (b.doneAt - a.doneAt);
+      });
+    } else {
+      list.sort(function (a, b) {
+        return ((a.money || 0) - (b.money || 0)) ||
+               ((a.exp || 0) - (b.exp || 0)) ||
+               (b.doneAt - a.doneAt);
+      });
+    }
+
+    var ul = $('#dnList');
+    ul.textContent = '';
+    list.forEach(function (x) { ul.appendChild(doneRow(x)); });
+
+    if ($('#dnClear')) $('#dnClear').hidden = !dnQuery;
+
+    var emp = $('#dnEmpty');
+    if (emp) {
+      emp.hidden = list.length > 0;
+      if (!list.length) {
+        emp.querySelector('p').textContent = all.length
+          ? '没有匹配的任务，换个词试试。'
+          : '这里还没有记录。勾掉一件待办，它就会出现在这儿。';
+      }
+    }
+  }
+
   /* ---------- 视图切换 ---------- */
   var curView = 'today';
   function switchView(v) {
     curView = v;
-    ['today', 'year', 'review', 'more', 'feed', 'opps', 'article'].forEach(function (n) {
+    ['today', 'year', 'review', 'more', 'feed', 'opps', 'article', 'done', 'income'].forEach(function (n) {
       $('#view-' + n).hidden = n !== v;
     });
     document.querySelectorAll('.tab').forEach(function (b) {
       var on = b.dataset.view === v ||
-        ((v === 'feed' || v === 'opps' || v === 'article') && b.dataset.view === 'today');
+        ((v === 'feed' || v === 'article' || v === 'income') && b.dataset.view === 'today') ||
+        ((v === 'opps' || v === 'done') && b.dataset.view === 'more');
       b.classList.toggle('on', on);
     });
     if (v === 'year') { renderYear(); renderDayPanel(); }
     if (v === 'review') renderReview();
     if (v === 'more') { renderIdeas(); renderSettings(); renderOppEntry(); }
     if (v === 'opps') renderOpps();
+    if (v === 'done') renderDone();
+    if (v === 'income') renderIncomeLog();
     if (v === 'feed') {
       var d = new Date();
       $('#feedDate').textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日';
@@ -1971,6 +2505,11 @@
     });
 
     $('#incomeBtn').addEventListener('click', toggleIncome);
+    $('#incomeLogBtn').addEventListener('click', function () {
+      $('#incomePanel').hidden = true;
+      switchView('income');
+    });
+    $('#incBack').addEventListener('click', function () { switchView('today'); });
     $('#incomeOk').addEventListener('click', addIncome);
     $('#incomeAmt').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); addIncome(); }
@@ -1988,8 +2527,40 @@
 
     $('#oppEntry').addEventListener('click', function () { switchView('opps'); });
     $('#oppBack').addEventListener('click', function () { switchView('more'); });
+
+    $('#doneEntry').addEventListener('click', function () { switchView('done'); });
+    $('#doneBack').addEventListener('click', function () { switchView('more'); });
+    $('#dnSearch').addEventListener('input', function () {
+      dnQuery = this.value;
+      renderDone();
+    });
+    $('#dnClear').addEventListener('click', function () {
+      dnQuery = '';
+      $('#dnSearch').value = '';
+      $('#dnSearch').focus();
+      renderDone();
+    });
+    document.querySelectorAll('#dnSort .dn-s').forEach(function (b) {
+      b.addEventListener('click', function () {
+        DN_SORT = this.dataset.sort;
+        document.querySelectorAll('#dnSort .dn-s').forEach(function (x) {
+          x.classList.toggle('on', x.dataset.sort === DN_SORT);
+        });
+        renderDone();
+      });
+    });
     $('#artBack').addEventListener('click', function () { switchView('feed'); });
     $('#oppAdd').addEventListener('click', addOppFromInput);
+    $('#oppSearch').addEventListener('input', function () {
+      oppQuery = this.value;
+      renderOpps();
+    });
+    $('#oppSearchClear').addEventListener('click', function () {
+      oppQuery = '';
+      $('#oppSearch').value = '';
+      $('#oppSearch').focus();
+      renderOpps();
+    });
     $('#oppInput').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); addOppFromInput(); this.blur(); }
     });
@@ -2011,13 +2582,6 @@
     $('#dayAddBtn').addEventListener('click', addDayTask);
     $('#dayAddInput').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); addDayTask(); this.blur(); }
-    });
-    $('#carryGo').addEventListener('click', function () {
-      var y = $('#carryTip').dataset.date;
-      if (!y) return;
-      selectedDate = y;
-      calCursor = y.slice(0, 7);
-      switchView('year');
     });
 
     document.querySelectorAll('.tab').forEach(function (b) {

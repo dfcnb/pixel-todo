@@ -837,8 +837,8 @@ main{padding:0 14px;max-width:520px;margin:0 auto}
 }
 
 .toast{
-  position:fixed;left:50%;top:calc(68px + env(safe-area-inset-top));
-  transform:translateX(-50%) translateY(-8px);
+  position:fixed;left:50%;bottom:calc(132px + env(safe-area-inset-bottom));
+  transform:translateX(-50%) translateY(8px);
   z-index:9998;
   background:var(--bg4);border:2px solid var(--line-hi);
   color:var(--ink);font-size:12.5px;padding:8px 14px;
@@ -1063,3 +1063,215 @@ main{padding:0 14px;max-width:520px;margin:0 auto}
   font-size:13px;letter-spacing:.08em;
 }
 .art-open:active{transform:translate(2px,2px)}
+
+/* ============ 已完成任务 ============ */
+.dn-search{display:flex;gap:7px;margin:16px 0 10px}
+.dn-search input{
+  flex:1;min-width:0;
+  background:var(--bg2);border:2px solid var(--line);
+  color:var(--ink);font-family:inherit;font-size:14px;
+  padding:10px 12px;outline:none;letter-spacing:.02em;
+}
+.dn-search input:focus{border-color:var(--line-hi);background:var(--bg3)}
+.dn-search input::placeholder{color:var(--ink3)}
+.dn-clear{
+  flex:0 0 42px;background:var(--bg2);border:2px solid var(--line);
+  color:var(--ink3);font-size:16px;font-family:inherit;line-height:1;
+  cursor:pointer;
+}
+.dn-clear:active{color:var(--hp);border-color:var(--hp)}
+
+.dn-sort{display:flex;gap:6px;margin-bottom:12px}
+.dn-s{
+  flex:1;min-width:0;
+  background:var(--bg2);border:2px solid var(--line);
+  color:var(--ink3);font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:10.5px;padding:6px 2px;cursor:pointer;letter-spacing:.02em;
+  white-space:nowrap;
+}
+.dn-s:active{transform:translate(1px,1px)}
+.dn-s.on{color:var(--ink);border-color:var(--line-hi);background:var(--bg3)}
+
+.dn-list{list-style:none}
+.dn-item{
+  display:grid;grid-template-columns:1fr auto;column-gap:10px;
+  align-items:start;
+  border:2px solid var(--line);background:var(--bg2);
+  padding:10px 12px;margin-bottom:7px;
+  box-shadow:2px 2px 0 rgba(0,0,0,.35);
+}
+.dn-item.legacy{opacity:.82}
+.dn-main{flex:1;min-width:0}
+.dn-text{
+  font-size:13.5px;color:var(--ink);line-height:1.5;
+  word-break:break-word;
+}
+.dn-item.legacy .dn-text{color:var(--ink2)}
+.dn-meta{
+  margin-top:4px;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:10px;color:var(--ink3);letter-spacing:.02em;
+}
+.dn-gain{
+  flex:0 0 auto;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:10.5px;color:var(--exp);letter-spacing:.01em;
+  text-align:right;line-height:1.6;margin-top:1px;
+  white-space:nowrap;
+}
+
+/* 四格统计：已完成任务页多一个「累计收益」 */
+.maxrow.maxrow-4{grid-template-columns:repeat(4,1fr);gap:6px}
+.maxrow.maxrow-4 .stat{padding:9px 3px 8px}
+.maxrow.maxrow-4 .stat b{font-size:17px}
+.maxrow.maxrow-4 .stat span{font-size:9.5px;letter-spacing:0}
+
+/* 每条记录右侧：EXP 与手动金额 */
+.dn-side{
+  flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;gap:6px;
+}
+.dn-side .dn-gain{white-space:nowrap}
+.dn-money{
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:10px;letter-spacing:.02em;
+  background:transparent;border:1px dashed #3a4152;color:var(--ink3);
+  padding:2px 7px;cursor:pointer;white-space:nowrap;
+}
+.dn-money:active{transform:translate(1px,1px)}
+.dn-money.has{
+  color:var(--coin);border:1px solid #5c4a1a;background:#1c1808;
+}
+.dn-money-edit{display:flex;align-items:center;gap:4px}
+.dn-money-edit input{
+  width:76px;background:var(--bg);border:2px solid var(--line);
+  color:var(--coin);font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:11.5px;padding:3px 6px;outline:none;text-align:right;
+}
+.dn-money-edit input:focus{border-color:var(--line-hi)}
+.dn-money-ok{
+  width:23px;height:24px;padding:0;
+  background:#251d08;border:2px solid #4a3a12;color:var(--exp);
+  font-family:inherit;font-size:11px;line-height:1;cursor:pointer;
+}
+.dn-money-ok:active{transform:translate(1px,1px)}
+
+/* 放入机会库 */
+.dn-opp{
+  grid-column:1 / -1;
+  margin-top:8px;
+  background:transparent;border:1px dashed #3a4152;
+  color:var(--ink3);font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:10px;letter-spacing:.02em;
+  padding:5px 8px;cursor:pointer;text-align:left;
+}
+.dn-opp:active{transform:translate(1px,1px)}
+.dn-opp.on{
+  color:var(--green);border:1px solid #2f5c3c;background:#16241b;
+  cursor:default;opacity:.75;
+}
+.dn-opp.on:active{transform:none}
+
+/* ============ 机会库：搜索与评价 ============ */
+.opp-search{display:flex;gap:7px;margin-top:14px}
+.opp-search input{
+  flex:1;min-width:0;
+  background:var(--bg2);border:2px dashed var(--line);
+  color:var(--ink);font-family:inherit;font-size:13px;
+  padding:8px 11px;outline:none;letter-spacing:.02em;
+}
+.opp-search input:focus{border-style:solid;border-color:var(--line-hi);background:var(--bg3)}
+.opp-search input::placeholder{color:var(--ink3)}
+.opp-clear{
+  flex:0 0 38px;background:var(--bg2);border:2px dashed var(--line);
+  color:var(--ink3);font-size:15px;font-family:inherit;line-height:1;
+  cursor:pointer;
+}
+.opp-clear:active{color:var(--hp);border-color:var(--hp)}
+
+.opp-review{
+  margin-top:9px;padding:9px 10px;
+  background:var(--bg);border-left:3px solid var(--line-hi);
+  font-size:12px;color:var(--ink2);line-height:1.7;
+  white-space:pre-wrap;word-break:break-word;
+}
+.opp-rv-btn{
+  margin-top:8px;background:transparent;border:1px dashed #3a4152;
+  color:var(--ink3);font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:10px;letter-spacing:.02em;padding:4px 8px;cursor:pointer;
+}
+.opp-rv-btn:active{transform:translate(1px,1px)}
+.opp-rv-edit{margin-top:9px}
+.opp-rv-edit textarea{
+  width:100%;min-height:68px;background:var(--bg);
+  border:2px solid var(--line);color:var(--ink);
+  font-family:inherit;font-size:12.5px;line-height:1.7;
+  padding:8px 9px;outline:none;resize:vertical;
+}
+.opp-rv-edit textarea:focus{border-color:var(--line-hi)}
+.opp-rv-edit textarea::placeholder{color:var(--ink3)}
+.opp-rv-bar{display:flex;gap:6px;margin-top:6px}
+.opp-rv-bar .opp-btn{font-size:11.5px;padding:6px 6px}
+
+/* ============ 进账记录 ============ */
+.income-log-btn{
+  flex:0 0 100%;margin-top:3px;
+  background:transparent;border:2px dashed #3a4152;
+  color:var(--ink3);font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:10.5px;letter-spacing:.03em;padding:6px 8px;cursor:pointer;
+}
+.income-log-btn b{color:var(--coin);font-weight:600}
+.income-log-btn:active{transform:translate(1px,1px)}
+
+.inc-list{list-style:none}
+.inc-item{
+  display:grid;grid-template-columns:1fr auto;column-gap:10px;align-items:center;
+  border:2px solid var(--line);background:var(--bg2);
+  padding:10px 12px;margin-bottom:7px;
+  box-shadow:2px 2px 0 rgba(0,0,0,.35);
+}
+.inc-main{min-width:0}
+.inc-top{display:flex;align-items:baseline;gap:8px}
+.inc-amt{
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:15px;font-weight:600;color:var(--coin);
+  font-variant-numeric:tabular-nums;letter-spacing:.01em;
+}
+.inc-ch{
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:9.5px;color:var(--ink3);letter-spacing:.03em;
+  border:1px solid var(--line);padding:1px 5px;
+}
+.inc-meta{
+  margin-top:4px;font-size:11px;color:var(--ink2);line-height:1.5;
+  word-break:break-word;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.inc-del{
+  flex:0 0 auto;background:transparent;border:2px solid var(--line);
+  color:var(--ink3);font-family:inherit;font-size:11px;
+  padding:5px 9px;cursor:pointer;line-height:1;
+}
+.inc-del:active{color:var(--hp);border-color:var(--hp)}
+
+.inc-item.asking{border-color:#5c2329;background:#1e1518}
+.inc-item.asking .inc-main,
+.inc-item.asking .inc-del{opacity:.3}
+.inc-ask{
+  grid-column:1 / -1;display:flex;align-items:center;gap:7px;
+  margin-top:9px;padding-top:9px;border-top:1px dashed #5c2329;
+}
+.inc-ask-txt{
+  flex:1;min-width:0;font-size:11.5px;color:#ff8a8e;line-height:1.5;
+}
+.inc-yes,.inc-no{
+  flex:0 0 auto;font-family:inherit;font-size:11.5px;
+  padding:5px 10px;cursor:pointer;border:2px solid;
+}
+.inc-yes{background:#2a1214;border-color:#5c2329;color:#ff8a8e}
+.inc-no{background:var(--bg);border-color:var(--line);color:var(--ink3)}
+.inc-yes:active,.inc-no:active{transform:translate(1px,1px)}
+
+/* 任务起止时间与顺延标记 */
+.task-meta .span{color:var(--ink3)}
+.task-meta .carry{color:#e0838a}
+.task.aged .task-text{color:#e6d2d3}
